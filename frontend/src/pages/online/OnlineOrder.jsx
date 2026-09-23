@@ -1,0 +1,2256 @@
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
+import { selectCurrency, selectStoreSettings } from '../../redux/slices/settingsSlice';
+import apiService from '../../api/apiService';
+import { toast } from 'react-toastify';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
+import {
+  Box,
+  Grid,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
+  Card,
+  CardContent,
+  CardMedia,
+  InputAdornment,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Autocomplete,
+  Chip,
+  Badge,
+  Tooltip,
+  CircularProgress,
+  Container,
+  AppBar,
+  Toolbar,
+  Stepper,
+  Step,
+  StepLabel,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel,
+  Alert,
+} from '@mui/material';
+import {
+  Search,
+  Add,
+  Remove,
+  Delete,
+  ShoppingCart,
+  Person,
+  Receipt,
+  LocalOffer,
+  Payment,
+  Phone,
+  Email,
+  LocationOn,
+  Category,
+} from '@mui/icons-material';
+
+// Placeholder image for products without images
+const placeholderImage = `data:image/svg+xml;utf8,
+<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'>
+  <rect width='100%' height='100%' fill='%23f5f5f5'/>
+  <g fill='none' stroke='%23cccccc' stroke-width='4'>
+    <rect x='50' y='40' width='300' height='220' rx='12' ry='12'/>
+    <circle cx='200' cy='150' r='50'/>
+  </g>
+  <text x='200' y='260' font-family='Arial' font-size='18' fill='%23999999' text-anchor='middle'>No Image</text>
+</svg>`;
+
+// Helper to build a usable image URL for products
+const getProductImageUrl = (product) => {
+  // Ù†ÙÙØ¶Ù„ Ø§Ù„Ø­Ù‚Ù„ image_url Ù…Ù† Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+  const raw = product?.image_url || product?.image || product?.imageUrl || '';
+  let img = typeof raw === 'string' ? raw.trim() : '';
+  if (!img) return placeholderImage;
+
+  // Check if it's a Cloudinary URL (contains cloudinary.com or res.cloudinary.com)
+  if (/cloudinary\.com/i.test(img)) return img;
+
+  // Ø·Ø¨Ø¹Ù†Ø© Ø§Ù„Ù…Ø³Ø§Ø± Ù„Ù„ØªØ¹Ø§Ù…Ù„ Ù…Ø¹ Windows: ØªØ­ÙˆÙŠÙ„ \\ Ø¥Ù„Ù‰ /
+  img = img.replace(/\\\\/g, '/');
+
+  // Ø¥Ø²Ø§Ù„Ø© Ø§Ù„Ø§Ø³ØªØ¹Ù„Ø§Ù… Ø£Ùˆ Ø§Ù„Ù‡Ø§Ø´ Ø¥Ù† ÙˆØ¬Ø¯
+  const noQuery = img.split('#')[0].split('?')[0];
+
+  // Ø¥Ø°Ø§ ÙƒØ§Ù† Ø§Ù„Ø±Ø§Ø¨Ø· Ù…Ø·Ù„Ù‚Ù‹Ø§
+  if (/^https?:\/\//i.test(noQuery)) {
+    try {
+      const url = new URL(noQuery);
+      // Ø¥Ø°Ø§ ÙƒØ§Ù† Ù†ÙØ³ Ø§Ù„Ø£ØµÙ„ Ù†ÙØ¨Ù‚ÙŠÙ‡ ÙƒØ§Ù…Ù„Ø§Ù‹
+      if (url.origin === window.location.origin) return url.href;
+      // Ø¥Ù† ÙƒØ§Ù† Ø¶Ù…Ù† /uploads/ Ù†Ø¹ÙŠØ¯ Ø§Ù„Ù…Ø³Ø§Ø± Ø§Ù„Ù†Ø³Ø¨ÙŠ
+      if (url.pathname.includes('/uploads/')) {
+        const idx = url.pathname.indexOf('/uploads/');
+        return url.pathname.slice(idx);
+      }
+      // Ø®Ù„Ø§Ù Ø°Ù„Ùƒ Ù†ÙØ¨Ù‚ÙŠ Ø§Ù„Ø±Ø§Ø¨Ø· ÙƒØ§Ù…Ù„Ø§Ù‹ (Ù‚Ø¯ ÙŠÙƒÙˆÙ† Ù„Ù…Ø®Ø²Ù† Ø®Ø§Ø±Ø¬ÙŠ)
+      return url.href;
+    } catch {
+      // Ù„Ùˆ ÙØ´Ù„ Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ù†ÙÙƒÙ…Ù„ Ø§Ù„Ù…Ø¹Ø§Ù„Ø¬Ø© Ø£Ø¯Ù†Ø§Ù‡
+    }
+  }
+
+  // Ø§Ø³ØªØ®Ø¯Ø§Ù… Ù…Ø³Ø§Ø± Ù†Ø³Ø¨ÙŠ Ø¨Ù†ÙØ³ Ø§Ù„Ø£ØµÙ„ Ù„ØªØ¬Ù†Ø¨ Ù…Ø´Ø§ÙƒÙ„ CORS Ùˆ CSP
+  if (noQuery.startsWith('/uploads/')) return noQuery; // Ù†ÙØ³ Ø§Ù„Ø£ØµÙ„
+  if (noQuery.includes('/uploads/')) {
+    const idx = noQuery.indexOf('/uploads/');
+    return noQuery.slice(idx);
+  }
+  if (noQuery.startsWith('uploads/')) return `/${noQuery}`;
+
+  // Ø¹Ù„Ù‰ Ø§Ù„Ø£Ø±Ø¬Ø­ Ø§Ø³Ù… Ù…Ù„Ù ØµÙˆØ±Ø© Ø£Ùˆ Ù…Ø³Ø§Ø± Ø¨Ø¯ÙˆÙ† Ù…Ø¬Ù„Ø¯ uploads
+  if (/\.(png|jpe?g|gif|webp|svg)$/i.test(noQuery)) {
+    // Ø§Ø³ØªØ®Ø±Ø¬ Ø§Ø³Ù… Ø§Ù„Ù…Ù„Ù ÙÙ‚Ø·
+    const parts = noQuery.split('/');
+    const fileName = parts[parts.length - 1];
+    return `/uploads/${fileName}`;
+  }
+
+  return placeholderImage;
+};
+
+const OnlineOrder = () => {
+  const { t, i18n } = useTranslation(['online']);
+  const currency = useSelector(selectCurrency);
+  const storeSettings = useSelector(selectStoreSettings);
+
+  // Set document title
+  useEffect(() => {
+    document.title = t('pageTitle.onlineOrder');
+  }, [i18n.language, t]);
+
+  // State for cart items
+  const [cartItems, setCartItems] = useState([]);
+  
+  // State for products and categories
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([{ id: 1, name: 'all' }]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // State for product filtering
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(1); // Default to 'All'
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  // Availability gating
+  const [ordersOpen, setOrdersOpen] = useState(true);
+  const [ordersClosedMessage, setOrdersClosedMessage] = useState('');
+  
+  // State for customer information with localStorage persistence
+  const [customerInfo, setCustomerInfo] = useLocalStorage('customerInfo', {
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    paymentMethod: 'cashOnDelivery', // Default payment method
+    mobilePaymentProvider: '', // MTn or Airtel
+    transactionImage: null, // For payment receipt upload
+  });
+  
+  // Ù…Ù„Ø¡ ØªÙ„Ù‚Ø§Ø¦ÙŠ Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù…Ù† localStorage Ø¹Ù†Ø¯ ØªØ­Ù…ÙŠÙ„ Ø§Ù„ØµÙØ­Ø©
+  useEffect(() => {
+    // ØªØ­Ù‚Ù‚ Ù…Ù† ÙˆØ¬ÙˆØ¯ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ ÙÙŠ localStorage
+    const savedCustomerInfo = localStorage.getItem('customerInfo');
+    if (savedCustomerInfo) {
+      try {
+        const parsedInfo = JSON.parse(savedCustomerInfo);
+        // ØªØ­Ø¯ÙŠØ« Ù†Ù…ÙˆØ°Ø¬ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„
+        setCustomerInfo(prevInfo => ({
+          ...prevInfo,
+          ...parsedInfo
+        }));
+        console.log('ØªÙ… Ø§Ø³ØªØ±Ø¬Ø§Ø¹ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù…Ù† Ø§Ù„ØªØ®Ø²ÙŠÙ† Ø§Ù„Ù…Ø­Ù„ÙŠ:', parsedInfo);
+      } catch (error) {
+        console.error('Ø®Ø·Ø£ ÙÙŠ ØªØ­Ù„ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø§Ù„Ù…Ø®Ø²Ù†Ø©:', error);
+      }
+    }
+  }, []);
+  
+  // State for location loading
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState(null);
+
+  // State for payment confirmation dialog
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState('');
+  
+  // State for call button dialog
+  const [callDialogOpen, setCallDialogOpen] = useState(false);
+
+  // Phone numbers for MTN and Airtel
+  const phoneNumbers = {
+    mtn: '0792122222',
+    airtel: '0744323289'
+  };
+
+  // Function to handle phone call
+  const handlePhoneCall = (provider) => {
+    const phoneNumber = phoneNumbers[provider];
+    if (phoneNumber) {
+      // Create tel: link to initiate call
+      window.location.href = `tel:${phoneNumber}`;
+    }
+    setCallDialogOpen(false);
+  };
+  // State for order process
+  const [activeStep, setActiveStep] = useState(0);
+  const steps = [t('selectProducts'), t('customerInfo'), t('confirmOrder')];
+  
+  // State for order submission
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderComplete, setOrderComplete] = useState(false);
+  const [orderNumber, setOrderNumber] = useState(null);
+
+  // Helper function to ensure number conversion
+  const parsePrice = (price) => {
+    const numPrice = parseFloat(price);
+    return isNaN(numPrice) ? 0 : numPrice;
+  };
+  
+  // Delivery fee constant (4000 UGX)
+  const DELIVERY_FEE = 4000;
+  
+  // Calculate totals with safe number conversion and delivery fee
+  const subtotal = cartItems.reduce((sum, item) => {
+    const itemPrice = parsePrice(item.price);
+    return sum + (itemPrice * item.quantity);
+  }, 0);
+  const taxRatePercent = Number(storeSettings?.taxRate) || 0;
+  const tax = subtotal * (taxRatePercent / 100);
+  
+  // Add delivery fee to total calculation
+  const deliveryFee = DELIVERY_FEE;
+  const total = subtotal + tax + deliveryFee;
+  
+  // Fetch settings, products, and categories from API
+  useEffect(() => {
+    // Function to fetch products and categories
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        // Fetch settings first to determine availability
+        const settings = await apiService.getSettings();
+        // Coerce enabled to a proper boolean (handles true/'true'/1/'1')
+        const enabled = (
+          settings.online_orders_enabled === true ||
+          settings.online_orders_enabled === 'true' ||
+          settings.online_orders_enabled === 1 ||
+          settings.online_orders_enabled === '1'
+        );
+        const startTime = settings.online_orders_start_time || '00:00';
+        const endTime = settings.online_orders_end_time || '23:59';
+        // Ensure days array contains numeric values (0-6). Backend may return strings.
+        const rawDays = settings.online_orders_days;
+        const days = Array.isArray(rawDays)
+          ? rawDays
+              .map((d) => Number(d))
+              .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+          : null; // array of 0-6 (0=Sunday)
+
+        const now = new Date();
+        const currentDay = now.getDay();
+        const toMinutes = (str) => {
+          const [h, m] = String(str).split(':').map((x) => parseInt(x, 10));
+          if (isNaN(h) || isNaN(m)) return 0;
+          return h * 60 + m;
+        };
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const startMinutes = toMinutes(startTime);
+        const endMinutes = toMinutes(endTime);
+
+        let isOpen = enabled;
+        if (isOpen && Array.isArray(days) && days.length > 0 && !days.includes(currentDay)) {
+          isOpen = false;
+        } else if (isOpen) {
+          const wrapsMidnight = endMinutes < startMinutes;
+          if (wrapsMidnight) {
+            isOpen = nowMinutes >= startMinutes || nowMinutes < endMinutes;
+          } else {
+            isOpen = nowMinutes >= startMinutes && nowMinutes < endMinutes;
+          }
+        }
+
+        setOrdersOpen(isOpen);
+        setOrdersClosedMessage(t('online:ordersClosedMessage', 'Ø§Ù„Ø·Ù„Ø¨Ø§Øª Ø¹Ø¨Ø± Ø§Ù„Ø¥Ù†ØªØ±Ù†Øª ØºÙŠØ± Ù…ØªØ§Ø­Ø© Ø­Ø§Ù„ÙŠØ§Ù‹. ÙŠØ±Ø¬Ù‰ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ø®Ù„Ø§Ù„ Ø§Ù„Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ù…Ø­Ø¯Ø¯Ø©.'));
+
+        // If closed, still show categories but skip products
+        if (!isOpen) {
+          let allCategories = [{ id: 1, name: t('all') }];
+          try {
+            const categoriesData = await apiService.getCategories();
+            const sortedCategories = (categoriesData || []).sort((a, b) => {
+              if (a.display_order !== b.display_order) {
+                return (a.display_order || 0) - (b.display_order || 0);
+              }
+              return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+            });
+            allCategories = allCategories.concat(sortedCategories);
+          } catch (catErr) {
+            console.warn('Fetching categories failed, using default only', catErr);
+          }
+          setCategories(allCategories);
+          setProducts([]);
+          return;
+        }
+
+        // Fetch products directly
+        const productsData = await apiService.getProducts();
+        const safeProducts = Array.isArray(productsData) ? productsData.map(product => ({
+          ...product,
+          price: parsePrice(product.price), // Ensure price is a number
+          stock: parseInt(product.stock) || 0 // Ensure stock is a number
+        })) : [];
+        // Only show products marked for online availability
+        const onlineProducts = (safeProducts || []).filter(p => Boolean(p.show_online));
+        setProducts(onlineProducts);
+        
+        // Fetch categories (gracefully fallback to just 'All' if it fails)
+        let allCategories = [{ id: 1, name: t('all') }];
+        try {
+          const categoriesData = await apiService.getCategories();
+          // Sort categories by display_order, then by created_at
+          const sortedCategories = (categoriesData || []).sort((a, b) => {
+            if (a.display_order !== b.display_order) {
+              return (a.display_order || 0) - (b.display_order || 0);
+            }
+            return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+          });
+          allCategories = allCategories.concat(sortedCategories);
+        } catch (catErr) {
+          console.warn('Fetching categories failed, using default only', catErr);
+        }
+        setCategories(allCategories);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError(err.userMessage || t('error'));
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+  
+  // Filter products based on search query and selected category
+  useEffect(() => {
+    let filtered = products;
+    
+    // Filter by search query (name, description, or barcode)
+    if (searchQuery) {
+      filtered = filtered.filter(product =>
+        product.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.id?.toString().includes(searchQuery) // Use ID as barcode for now
+      );
+    }
+    
+    // Filter by category
+    if (selectedCategory !== 1) { // If not 'All'
+      const categoryName = categories.find(cat => cat.id === selectedCategory)?.name;
+      filtered = filtered.filter(product => 
+        product.category?.name === categoryName || 
+        product.category === categoryName
+      );
+    }
+    
+    setFilteredProducts(filtered);
+  }, [searchQuery, selectedCategory, products, categories]);
+
+  // Add product to cart
+  const addToCart = (product) => {
+    setCartItems(prevItems => {
+      // Check if product already exists in cart
+      const existingItemIndex = prevItems.findIndex(item => item.id === product.id);
+      
+      if (existingItemIndex >= 0) {
+        // Product exists, update quantity
+        const updatedItems = [...prevItems];
+        updatedItems[existingItemIndex] = {
+          ...updatedItems[existingItemIndex],
+          quantity: updatedItems[existingItemIndex].quantity + 1
+        };
+        return updatedItems;
+      } else {
+        // Product doesn't exist, add new item
+        return [...prevItems, {
+          id: product.id,
+          name: product.name,
+          price: product.price || product.selling_price || 0,
+          quantity: 1,
+          image: getProductImageUrl(product)
+        }];
+      }
+    });
+  };
+
+  // Remove product from cart
+  const removeFromCart = (productId) => {
+    setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
+  };
+
+  // Update product quantity in cart
+  const updateQuantity = (productId, newQuantity) => {
+    if (newQuantity < 1) return;
+    
+    setCartItems(prevItems => {
+      return prevItems.map(item => {
+        if (item.id === productId) {
+          return { ...item, quantity: newQuantity };
+        }
+        return item;
+      });
+    });
+  };
+
+  // Handle customer info change
+  const handleCustomerInfoChange = (e) => {
+    const { name, value } = e.target;
+    setCustomerInfo(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // Handle payment method change
+  const handlePaymentMethodChange = (e) => {
+    const { value } = e.target;
+    setCustomerInfo(prev => ({
+      ...prev,
+      paymentMethod: value,
+      // Reset mobile payment provider if not mobile payment
+      mobilePaymentProvider: value === 'mobileMoney' ? prev.mobilePaymentProvider : ''
+    }));
+  };
+  
+  // Handle mobile payment provider change
+  const handleMobileProviderChange = (e) => {
+    const { value } = e.target;
+    setCustomerInfo(prev => ({
+      ...prev,
+      mobilePaymentProvider: value
+    }));
+    
+    // Open confirmation dialog instead of payment app directly
+    setSelectedProvider(value);
+    setConfirmDialogOpen(true);
+  };
+  
+  // Open mobile payment app with order total
+  const openPaymentApp = (provider) => {
+    // Only proceed if we have a total amount
+    if (total <= 0) return;
+    
+    // Format amount without decimal places for mobile payment
+    const amount = Math.round(total);
+    
+    // Get phone numbers from store settings
+    const phoneNumbers = {
+      mtn: storeSettings?.mtnPhoneNumber || '',
+      airtel: storeSettings?.airtelPhoneNumber || ''
+    };
+    
+    // Get the phone number for the selected provider
+    const phoneNumber = phoneNumbers[provider];
+    
+    // If phone number is not set, show error
+    if (!phoneNumber) {
+      toast.error(t('phoneNumberNotSet', 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ØºÙŠØ± Ù…Ø­Ø¯Ø¯ Ù„Ù…Ø²ÙˆØ¯ Ø§Ù„Ø®Ø¯Ù…Ø© Ø§Ù„Ù…Ø­Ø¯Ø¯'));
+      return;
+    }
+    
+    // Get PIN digits from store settings
+    const pinDigits = storeSettings?.mobilePinDigits || 4;
+    
+    // Create deep links based on provider
+    let paymentUrl = '';
+    let displayMessage = '';
+    
+    if (provider === 'mtn') {
+      // MTN Money direct code format - using tel: protocol to open phone dialer
+      // Format: tel:*321*phone_number*amount*pin#
+      paymentUrl = `tel:*321*${phoneNumber}*${amount}*${'0'.repeat(pinDigits)}%23`;
+      displayMessage = t('online:paymentInstructions', 'ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ø±Ù‚Ù… PIN Ø§Ù„Ø®Ø§Øµ Ø¨Ùƒ Ø¨Ø¯Ù„Ø§Ù‹ Ù…Ù† {{zeros}}', { zeros: '0'.repeat(pinDigits) });
+    } else if (provider === 'airtel') {
+      // Airtel Money format - using tel: protocol to open phone dialer
+      // Format: tel:*166*amount*B number# (as per the correct Airtel Me2U format)
+      paymentUrl = `tel:*166*${amount}*B${phoneNumber}%23`;
+      displayMessage = t('online:airtelInstructions', 'Ø¨Ø¹Ø¯ Ø§Ù„Ø¶ØºØ· Ø¹Ù„Ù‰ Ø§Ù„Ø§ØªØµØ§Ù„ØŒ Ø³ÙŠØªÙ… ØªÙ†ÙÙŠØ° Ø¹Ù…Ù„ÙŠØ© Ø§Ù„ØªØ­ÙˆÙŠÙ„ Ù…Ø¨Ø§Ø´Ø±Ø© Ø¥Ù„Ù‰ Ø§Ù„Ø±Ù‚Ù… {{phoneNumber}} Ø¨Ù…Ø¨Ù„Øº {{amount}}', { phoneNumber, amount });
+    }
+    
+    // Open payment URL
+    if (paymentUrl) {
+      window.location.href = paymentUrl;
+      toast.info(displayMessage);
+    }
+  };
+  
+  // Handle transaction image upload
+  const handleTransactionImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setCustomerInfo(prev => ({
+        ...prev,
+        transactionImage: file
+      }));
+    }
+  };
+  
+  // Get user location and convert to address with detailed point information
+  const getUserLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error(t('locationNotSupported', 'Ø®Ø¯Ù…Ø© ØªØ­Ø¯ÙŠØ¯ Ø§Ù„Ù…ÙˆÙ‚Ø¹ ØºÙŠØ± Ù…Ø¯Ø¹ÙˆÙ…Ø© ÙÙŠ Ù…ØªØµÙØ­Ùƒ'));
+      return;
+    }
+    
+    setLocationLoading(true);
+    
+    // Options for geolocation
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 30000, // Increased timeout to 30s as requested
+      maximumAge: 0
+    };
+
+    const handleSuccess = async (position) => {
+      try {
+        const { latitude, longitude } = position.coords;
+        const accuracy = position.coords.accuracy;
+        
+        // Format coordinates as numbers only
+        const formattedCoords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        const accuracyInfo = `${t('accuracy', 'Ø¯Ù‚Ø©')}: ${Math.round(accuracy)} ${t('meters', 'Ù…ØªØ±')}`;
+        
+        // Check if Google Maps API key is available
+        const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+          // If no API key, just show coordinates as numbers
+          const pointInfo = formattedCoords;
+          
+          setCustomerInfo(prev => ({
+            ...prev,
+            address: pointInfo
+          }));
+          
+          toast.warning(t('noApiKey', 'ØªÙ… ØªØ­Ø¯ÙŠØ¯ Ø¥Ø­Ø¯Ø§Ø«ÙŠØ§Øª Ù…ÙˆÙ‚Ø¹Ùƒ. ÙŠØ±Ø¬Ù‰ Ø¥Ø¶Ø§ÙØ© Ù…ÙØªØ§Ø­ Google Maps API Ù„Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Ø¹Ù†ÙˆØ§Ù† Ù…ÙØµÙ„.'));
+          setLocationLoading(false);
+          return;
+        }
+        
+        // Use Google Maps Geocoding API to get address from coordinates
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&language=${i18n.language}`
+        );
+        
+        const data = await response.json();
+        
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          // Get the formatted address
+          const formattedAddress = data.results[0].formatted_address;
+          
+          // Extract additional location details if available
+          let locationDetails = [];
+          if (data.results[0].address_components) {
+            // Try to extract neighborhood, locality, and administrative area
+            const components = data.results[0].address_components;
+            const neighborhood = components.find(c => c.types.includes('neighborhood'))?.long_name;
+            const locality = components.find(c => c.types.includes('locality'))?.long_name;
+            const adminArea = components.find(c => c.types.includes('administrative_area_level_1'))?.long_name;
+            
+            if (neighborhood) locationDetails.push(neighborhood);
+            if (locality && !locationDetails.includes(locality)) locationDetails.push(locality);
+            if (adminArea && !locationDetails.includes(adminArea)) locationDetails.push(adminArea);
+          }
+          
+          // Combine all information with coordinates as numbers only
+          const detailedAddress = `${formattedAddress}\n${locationDetails.length > 0 ? locationDetails.join(', ') + '\n' : ''}${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          
+          setCustomerInfo(prev => ({
+            ...prev,
+            address: detailedAddress
+          }));
+          
+          toast.success(t('locationDetected', 'ØªÙ… ØªØ­Ø¯ÙŠØ¯ Ù…ÙˆÙ‚Ø¹Ùƒ Ø¨Ù†Ø¬Ø§Ø­'));
+        } else {
+          throw new Error(data.status || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Geocoding error:', error);
+        toast.error(t('locationError', 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØ­Ø¯ÙŠØ¯ Ù…ÙˆÙ‚Ø¹Ùƒ. ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ø§Ù„Ø¹Ù†ÙˆØ§Ù† ÙŠØ¯ÙˆÙŠÙ‹Ø§.'));
+      } finally {
+        setLocationLoading(false);
+      }
+    };
+
+    const handleError = (error) => {
+      console.error('Geolocation error:', error);
+      
+      // Retry logic: if timeout and we were using high accuracy, try again with low accuracy
+      if (error.code === error.TIMEOUT && options.enableHighAccuracy) {
+        console.log('Timeout with high accuracy, retrying with low accuracy...');
+        toast.info(t('locationRetry', 'Ø¬Ø§Ø±ÙŠ Ù…Ø­Ø§ÙˆÙ„Ø© ØªØ­Ø¯ÙŠØ¯ Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ø¨Ø¯Ù‚Ø© Ø£Ù‚Ù„...'));
+        
+        navigator.geolocation.getCurrentPosition(
+          handleSuccess,
+          handleFinalError,
+          { ...options, enableHighAccuracy: false, timeout: 30000 }
+        );
+        return;
+      }
+
+      handleFinalError(error);
+    };
+
+    const handleFinalError = (error) => {
+      let errorMessage;
+      
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage = t('locationPermissionDenied', 'ØªÙ… Ø±ÙØ¶ Ø¥Ø°Ù† Ø§Ù„ÙˆØµÙˆÙ„ Ø¥Ù„Ù‰ Ø§Ù„Ù…ÙˆÙ‚Ø¹');
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage = t('locationUnavailable', 'Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù…ÙˆÙ‚Ø¹ ØºÙŠØ± Ù…ØªØ§Ø­Ø©');
+          break;
+        case error.TIMEOUT:
+          errorMessage = t('locationTimeout', 'Ø§Ù†ØªÙ‡Øª Ù…Ù‡Ù„Ø© Ø·Ù„Ø¨ Ø§Ù„Ù…ÙˆÙ‚Ø¹. ÙŠØ±Ø¬Ù‰ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§ØªØµØ§Ù„Ùƒ Ø¨Ø§Ù„Ø¥Ù†ØªØ±Ù†Øª Ø£Ùˆ Ù…Ø­Ø§ÙˆÙ„Ø© Ù…ÙƒØ§Ù† Ù…ÙØªÙˆØ­.');
+          break;
+        default:
+          errorMessage = t('locationError', 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØ­Ø¯ÙŠØ¯ Ù…ÙˆÙ‚Ø¹Ùƒ');
+      }
+      
+      toast.error(errorMessage);
+      setLocationLoading(false);
+    };
+    
+    // Start initial request
+    navigator.geolocation.getCurrentPosition(handleSuccess, handleError, options);
+  };
+
+  // Handle next step
+  const handleNext = () => {
+    if (activeStep === 0 && cartItems.length === 0) {
+      toast.error(t('pleaseAddItems'));
+      return;
+    }
+    
+    if (activeStep === 1) {
+      // Validate customer info
+      if (!customerInfo.name || !customerInfo.phone) {
+        toast.error(t('pleaseProvideInfo'));
+        return;
+      }
+      
+      // Validate payment method information
+      if (customerInfo.paymentMethod === 'mobileMoney') {
+        if (!customerInfo.mobilePaymentProvider) {
+          toast.error(t('selectMobileProvider', 'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ù…Ø²ÙˆØ¯ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¯ÙØ¹ Ø¹Ø¨Ø± Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„'));
+          return;
+        }
+        
+        if (!customerInfo.transactionImage) {
+          toast.error(t('uploadTransactionReceipt', 'Ø§Ù„Ø±Ø¬Ø§Ø¡ ØªØ­Ù…ÙŠÙ„ Ø¥ÙŠØµØ§Ù„ Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø©'));
+          return;
+        }
+      }
+    }
+    
+    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+  };
+
+  // Handle back step
+  const handleBack = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep - 1);
+  };
+
+  // Check if customer exists and create if not
+  const checkAndCreateCustomer = async (customerData) => {
+    try {
+      // Validate customer data
+      if (!customerData.phone && !customerData.email) {
+        console.error('Cannot search for customer: missing both phone and email');
+        return null;
+      }
+
+      // Ø§Ø³ØªØ®Ø¯Ø§Ù… API Ø§Ù„Ø¬Ø¯ÙŠØ¯ Ù„Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø£Ùˆ Ø¥Ù†Ø´Ø§Ø¦Ù‡
+      console.log('Finding or creating customer with data:', customerData);
+      const customer = await apiService.findOrCreateCustomer({
+        name: customerData.name || 'Guest',
+        phone: customerData.phone || '',
+        email: customerData.email || '',
+        address: customerData.address || '',
+        source: 'online' // Mark as online customer
+      });
+      
+      // Ø­ÙØ¸ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ ÙÙŠ localStorage Ù„Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ù…Ø³ØªÙ‚Ø¨Ù„ÙŠ
+      if (customer && customer.id) {
+        console.log('Found or created customer:', customer);
+        
+        // ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ ÙÙŠ localStorage
+        setCustomerInfo(prevInfo => ({
+          ...prevInfo,
+          name: customer.name || prevInfo.name,
+          email: customer.email || prevInfo.email,
+          phone: customer.phone || prevInfo.phone,
+          address: customer.address || prevInfo.address
+        }));
+        
+        return customer;
+      } else {
+        console.error('Failed to find or create customer, API returned:', customer);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error in checkAndCreateCustomer:', error);
+      // Continue with order even if customer creation fails
+      return null;
+    }
+  };
+
+  // Submit order
+  const submitOrder = async () => {
+    try {
+      setOrderSubmitting(true);
+      
+      // Validate payment method if mobile money is selected
+      if (customerInfo.paymentMethod === 'mobileMoney') {
+        if (!customerInfo.mobilePaymentProvider) {
+          toast.error(t('selectMobileProvider', 'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ù…Ø²ÙˆØ¯ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¯ÙØ¹ Ø¹Ø¨Ø± Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„'));
+          setOrderSubmitting(false);
+          return;
+        }
+        
+        if (!customerInfo.transactionImage) {
+          toast.error(t('uploadTransactionReceipt', 'Ø§Ù„Ø±Ø¬Ø§Ø¡ ØªØ­Ù…ÙŠÙ„ Ø¥ÙŠØµØ§Ù„ Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø©'));
+          setOrderSubmitting(false);
+          return;
+        }
+      }
+      
+      // Create form data for file upload
+      const formData = new FormData();
+      
+      // Prepare order data as a single payload (no pre-customer call)
+      const orderData = {
+        customerData: {
+          name: customerInfo.name,
+          phone: customerInfo.phone,
+          email: customerInfo.email,
+          address: customerInfo.address,
+          paymentMethod: customerInfo.paymentMethod,
+          mobilePaymentProvider: customerInfo.mobilePaymentProvider
+        },
+        cartItems: cartItems.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+          unitPrice: item.price
+        })),
+        subtotal,
+        tax,
+        deliveryFee,
+        total,
+        orderType: 'online',
+        paymentMethod: customerInfo.paymentMethod,
+        deliveryAddress: customerInfo.address || ''
+      };
+      
+      // Add order data to form
+      // FIX: Send flat fields instead of nested JSON string to avoid parsing issues
+      formData.append('customerName', customerInfo.name);
+      formData.append('customerPhone', customerInfo.phone);
+      formData.append('customerEmail', customerInfo.email || '');
+      formData.append('deliveryAddress', customerInfo.address || '');
+      formData.append('paymentMethod', customerInfo.paymentMethod);
+      formData.append('subtotal', subtotal);
+      formData.append('tax', tax);
+      formData.append('deliveryFee', deliveryFee);
+      formData.append('total', total);
+      
+      // Serialize items as JSON string since it's an array
+      formData.append('items', JSON.stringify(cartItems.map(item => ({
+        productId: item.id,
+        quantity: item.quantity,
+        unitPrice: item.price
+      }))));
+
+      // Also append the original JSON for backward compatibility if needed
+      formData.append('orderData', JSON.stringify(orderData));
+
+      // Add transaction image based on payment method
+      if (customerInfo.paymentMethod === 'mobileMoney') {
+        if (!customerInfo.transactionImage || !(customerInfo.transactionImage instanceof File)) {
+          toast.error(t('uploadTransactionReceipt', 'Ø§Ù„Ø±Ø¬Ø§Ø¡ ØªØ­Ù…ÙŠÙ„ Ø¥ÙŠØµØ§Ù„ Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø©'));
+          setOrderSubmitting(false);
+          return;
+        }
+        formData.append('transactionImage', customerInfo.transactionImage, customerInfo.transactionImage.name);
+      } else if (customerInfo.transactionImage && customerInfo.transactionImage instanceof File) {
+        // Optional: include image if user uploaded one anyway
+        formData.append('transactionImage', customerInfo.transactionImage, customerInfo.transactionImage.name);
+      }
+
+      // Debug: print request payload before sending
+      try {
+        console.log('Creating order with data (single request):', {
+          customerPhone: orderData.customerData.phone,
+          itemsCount: orderData.cartItems.length,
+          total,
+          image: customerInfo.transactionImage ? customerInfo.transactionImage.name : 'No image selected',
+        });
+      } catch (logErr) {
+        // ignore logging errors
+      }
+
+      // Submit order to API
+      const response = await apiService.createOrderWithImage(formData);
+      
+      // Handle success
+      setOrderNumber(response.orderNumber || response.id);
+      setOrderComplete(true);
+      setCartItems([]);
+      toast.success(t('orderPlacedSuccessfully'));
+      
+    } catch (error) {
+      console.error('âŒ Error creating order with image:', error);
+      // Print server response details if available
+      if (error.response) {
+        console.error('ðŸ”Ž Server responded with status:', error.response.status);
+        console.error('ðŸ“© Server response data:', error.response.data);
+        const backendMessage = error.response.data?.message || error.response.data?.error || error.message;
+        if (backendMessage) {
+          console.error('ðŸ’¬ Backend message:', backendMessage);
+        }
+        toast.error(backendMessage || t('errorPlacingOrder'));
+      } else if (error.request) {
+        console.error('ðŸ“¡ No response received from server:', error.request);
+        toast.error(t('noServerResponse', 'Ù„Ù… ÙŠØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø±Ø¯ Ù…Ù† Ø§Ù„Ø®Ø§Ø¯Ù…'));
+      } else {
+        console.error('âš™ï¸ Error setting up request:', error.message);
+        toast.error(error.message || t('errorPlacingOrder'));
+      }
+    } finally {
+      setOrderSubmitting(false);
+    }
+  };
+
+  // Render product grid
+  const renderProductGrid = () => {
+    if (loading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+    
+    if (error) {
+      return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <Typography color="error">{error}</Typography>
+        </Box>
+      );
+    }
+    
+    if (filteredProducts.length === 0) {
+      return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <Typography>{t('noProductsFound')}</Typography>
+        </Box>
+      );
+    }
+    
+    return (
+      <Grid container spacing={2}>
+        {filteredProducts.map((product) => (
+          <Grid item xs={6} sm={4} md={3} key={product.id}>
+            <Card 
+              sx={{ 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.06)',
+                '&:hover': {
+                  transform: 'translateY(-10px)',
+                  boxShadow: '0 16px 24px rgba(0, 0, 0, 0.15)'
+                },
+                position: 'relative'
+              }}
+              onClick={() => addToCart(product)}
+            >
+              <Box sx={{ position: 'relative', overflow: 'hidden' }}>
+                <CardMedia
+                  component="img"
+                  height="160"
+                  image={getProductImageUrl(product)}
+                  alt={product.name}
+                  onError={(e) => { e.currentTarget.src = placeholderImage; }}
+                  sx={{ 
+                    objectFit: 'cover',
+                    transition: 'transform 0.5s',
+                    '&:hover': {
+                      transform: 'scale(1.05)'
+                    }
+                  }}
+                />
+                {product.discount > 0 && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: '10px',
+                      right: '10px',
+                      bgcolor: 'error.main',
+                      color: 'white',
+                      borderRadius: '20px',
+                      px: 1.5,
+                      py: 0.5,
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                    }}
+                  >
+                    {t('discount')}
+                  </Box>
+                )}
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addToCart(product);
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    right: '10px',
+                    bgcolor: 'white',
+                    color: 'primary.main',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    zIndex: 20,
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      transform: 'scale(1.1)'
+                    }
+                  }}
+                >
+                  <Badge 
+                    badgeContent={cartItems.find(item => item.id === product.id)?.quantity || 0} 
+                    color="secondary"
+                    anchorOrigin={{
+                      vertical: 'top',
+                      horizontal: 'right',
+                    }}
+                  >
+                    <ShoppingCart />
+                  </Badge>
+                </IconButton>
+              </Box>
+              <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                <Typography 
+                  gutterBottom 
+                  variant="h6" 
+                  component="div" 
+                  noWrap
+                  sx={{ 
+                    fontWeight: 600,
+                    fontSize: '1rem',
+                    lineHeight: 1.2
+                  }}
+                >
+                  {product.name}
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ 
+                    mb: 1.5,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    height: '40px'
+                  }}
+                >
+                  {product.description || ''}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography 
+                    variant="h6" 
+                    sx={{ 
+                      color: '#7A1F3D', 
+                      fontWeight: 'bold',
+                      fontSize: '1.1rem'
+                    }}
+                  >
+                    {currency.symbol}{parsePrice(product.price || product.selling_price).toFixed(2)}
+                  </Typography>
+                </Box>
+              </CardContent>
+              
+              {/* Tooltip to show product description on hover */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  bgcolor: 'rgba(0,0,0,0.8)',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: 0,
+                  transition: 'opacity 0.3s ease',
+                  padding: 2,
+                  textAlign: 'center',
+                  zIndex: 10,
+                  '&:hover': {
+                    opacity: 1
+                  }
+                }}
+              >
+                <Typography variant="body1">
+                  {product.description || t('noDescription', 'Ù„Ø§ ÙŠÙˆØ¬Ø¯ ÙˆØµÙ Ù…ØªØ§Ø­')}
+                </Typography>
+              </Box>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    );
+  };
+
+  // Render cart
+  const renderCart = (readOnly = false) => {
+    if (cartItems.length === 0) {
+      return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <ShoppingCart sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+          <Typography>{t('cartEmpty')}</Typography>
+        </Box>
+      );
+    }
+    
+    return (
+      <>
+        <List>
+          {cartItems.map((item) => (
+            <ListItem key={item.id} divider>
+              <Box sx={{ display: 'flex', width: '100%', alignItems: 'center' }}>
+                <Box sx={{ width: 60, height: 60, mr: 2 }}>
+                  <img 
+                    src={item.image} 
+                    alt={item.name} 
+                    onError={(e) => { e.currentTarget.src = placeholderImage; }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} 
+                  />
+                </Box>
+                <ListItemText 
+                  primary={item.name} 
+                  secondary={`${currency.symbol}${parsePrice(item.price).toFixed(2)}`} 
+                  sx={{ flex: 1 }}
+                />
+                {readOnly ? (
+                  <Typography sx={{ mx: 1, minWidth: '30px', textAlign: 'center', fontWeight: 'bold' }}>
+                    x{item.quantity}
+                  </Typography>
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      disabled={item.quantity <= 1}
+                    >
+                      <Remove fontSize="small" />
+                    </IconButton>
+                    <Typography sx={{ mx: 1, minWidth: '30px', textAlign: 'center' }}>
+                      {item.quantity}
+                    </Typography>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                    >
+                      <Add fontSize="small" />
+                    </IconButton>
+                    <IconButton 
+                      edge="end" 
+                      aria-label="delete"
+                      onClick={() => removeFromCart(item.id)}
+                    >
+                      <Delete />
+                    </IconButton>
+                  </Box>
+                )}
+              </Box>
+            </ListItem>
+          ))}
+        </List>
+        <Box sx={{ p: 2 }}>
+          <Grid container spacing={1}>
+            <Grid item xs={6}>
+              <Typography variant="body1">{t('subtotal')}:</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="body1" align="right">
+                {currency.symbol}{subtotal.toFixed(2)}
+              </Typography>
+            </Grid>
+            {tax > 0 && (
+              <>
+                <Grid item xs={6}>
+                  <Typography variant="body1">{t('tax')} ({taxRatePercent}%):</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body1" align="right">
+                    {currency.symbol}{tax.toFixed(2)}
+                  </Typography>
+                </Grid>
+              </>
+            )}
+            <Grid item xs={6}>
+              <Typography variant="h6">{t('total')}:</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="h6" align="right" color="primary">
+                {currency.symbol}{total.toFixed(2)}
+              </Typography>
+            </Grid>
+          </Grid>
+        </Box>
+      </>
+    );
+  };
+
+  // Render customer info form
+  const renderCustomerInfoForm = () => {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          {t('enterYourDetails')}
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <TextField
+              required
+              fullWidth
+              label={t('name')}
+              name="name"
+              value={customerInfo.name}
+              onChange={handleCustomerInfoChange}
+              margin="normal"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              required
+              fullWidth
+              label={t('phone')}
+              name="phone"
+              value={customerInfo.phone}
+              onChange={handleCustomerInfoChange}
+              margin="normal"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Phone />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label={t('email')}
+              name="email"
+              value={customerInfo.email}
+              onChange={handleCustomerInfoChange}
+              margin="normal"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Email />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label={t('address')}
+              name="address"
+              value={customerInfo.address}
+              onChange={handleCustomerInfoChange}
+              margin="normal"
+              multiline
+              rows={4}
+              helperText={t('addressHelperText', 'Ø£Ø¯Ø®Ù„ Ø¹Ù†ÙˆØ§Ù†Ùƒ Ø£Ùˆ Ø§Ø³ØªØ®Ø¯Ù… Ø²Ø± ØªØ­Ø¯ÙŠØ¯ Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ù„Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Ø¹Ù†ÙˆØ§Ù†Ùƒ ØªÙ„Ù‚Ø§Ø¦ÙŠÙ‹Ø§')}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LocationOn />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title={t('getLocationFromMap', 'Ø§Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ù…Ù† Ø§Ù„Ø®Ø±ÙŠØ·Ø©')}>
+                      <span>
+                        <IconButton
+                          onClick={getUserLocation}
+                          edge="end"
+                          size="small"
+                          disabled={locationLoading}
+                          color="primary"
+                          sx={{ 
+                            bgcolor: 'rgba(25, 118, 210, 0.08)', 
+                            '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.12)' },
+                            mr: 1
+                          }}
+                        >
+                          {locationLoading ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <LocationOn />
+                          )}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          
+          {/* Payment Method Section */}
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+              {t('paymentMethod', 'Ø·Ø±ÙŠÙ‚Ø© Ø§Ù„Ø¯ÙØ¹')}
+            </Typography>
+            <FormControl component="fieldset">
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Paper 
+                    elevation={customerInfo.paymentMethod === 'cashOnDelivery' ? 3 : 1}
+                    sx={{
+                      p: 2,
+                      cursor: 'pointer',
+                      border: customerInfo.paymentMethod === 'cashOnDelivery' ? '2px solid #7A1F3D' : '1px solid #e0e0e0',
+                      borderRadius: 2,
+                      transition: 'all 0.3s ease',
+                      '&:hover': { borderColor: '#7A1F3D' }
+                    }}
+                    onClick={() => handlePaymentMethodChange({ target: { value: 'cashOnDelivery' } })}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Radio
+                        checked={customerInfo.paymentMethod === 'cashOnDelivery'}
+                        onChange={handlePaymentMethodChange}
+                        value="cashOnDelivery"
+                        name="payment-method-radio"
+                        sx={{ color: '#7A1F3D', '&.Mui-checked': { color: '#7A1F3D' } }}
+                      />
+                      <Box>
+                        <Typography variant="subtitle1">{t('cashOnDelivery', 'Ø§Ù„Ø¯ÙØ¹ Ø¹Ù†Ø¯ Ø§Ù„ØªÙˆØµÙŠÙ„')}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('payWhenReceived', 'Ø§Ø¯ÙØ¹ Ø¹Ù†Ø¯ Ø§Ø³ØªÙ„Ø§Ù… Ø·Ù„Ø¨Ùƒ')}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Paper>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Paper 
+                    elevation={customerInfo.paymentMethod === 'mobileMoney' ? 3 : 1}
+                    sx={{
+                      p: 2,
+                      cursor: 'pointer',
+                      border: customerInfo.paymentMethod === 'mobileMoney' ? '2px solid #7A1F3D' : '1px solid #e0e0e0',
+                      borderRadius: 2,
+                      transition: 'all 0.3s ease',
+                      '&:hover': { borderColor: '#7A1F3D' }
+                    }}
+                    onClick={() => handlePaymentMethodChange({ target: { value: 'mobileMoney' } })}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Radio
+                        checked={customerInfo.paymentMethod === 'mobileMoney'}
+                        onChange={handlePaymentMethodChange}
+                        value="mobileMoney"
+                        name="payment-method-radio"
+                        sx={{ color: '#7A1F3D', '&.Mui-checked': { color: '#7A1F3D' } }}
+                      />
+                      <Box>
+                        <Typography variant="subtitle1">{t('mobileMoney', 'Ø§Ù„Ø¯ÙØ¹ Ø¹Ø¨Ø± Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„')}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('payViaMobile', 'Ø§Ø¯ÙØ¹ Ø¨Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø®Ø¯Ù…Ø© Ø§Ù„Ø¯ÙØ¹ Ø¹Ø¨Ø± Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„')}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Paper>
+                </Grid>
+              </Grid>
+            </FormControl>
+          </Grid>
+          
+          {/* Delivery Fee Notification */}
+          <Grid item xs={12}>
+            <Alert 
+              severity="info" 
+              sx={{ 
+                mt: 2,
+                borderRadius: 2,
+                backgroundColor: 'rgba(122, 31, 61, 0.1)',
+                borderColor: '#7A1F3D',
+                '& .MuiAlert-icon': {
+                  color: '#7A1F3D'
+                }
+              }}
+            >
+              <Typography variant="body2">
+                <strong>{t('deliveryFeeNotice')}</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                {t('deliveryFeeAmount')}: <strong>{currency.symbol}{DELIVERY_FEE.toFixed(2)}</strong>
+              </Typography>
+            </Alert>
+          </Grid>
+          
+          {/* Mobile Money Provider Selection - Only shown when Mobile Money is selected */}
+          {customerInfo.paymentMethod === 'mobileMoney' && (
+            <Grid item xs={12}>
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(122, 31, 61, 0.05)', borderRadius: 2 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  {t('selectProvider', 'Ø§Ø®ØªØ± Ù…Ø²ÙˆØ¯ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¯ÙØ¹')}
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Paper 
+                      elevation={customerInfo.mobilePaymentProvider === 'mtn' ? 3 : 1}
+                      sx={{
+                        p: 2,
+                        cursor: 'pointer',
+                        border: customerInfo.mobilePaymentProvider === 'mtn' ? '2px solid #FFCC00' : '1px solid #e0e0e0',
+                        borderRadius: 2,
+                        transition: 'all 0.3s ease',
+                        '&:hover': { borderColor: '#FFCC00' },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100px',
+                        backgroundColor: customerInfo.mobilePaymentProvider === 'mtn' ? 'rgba(255, 204, 0, 0.1)' : 'white'
+                      }}
+                      onClick={() => handleMobileProviderChange({ target: { value: 'mtn' } })}
+                    >
+                      <Typography variant="h6" align="center" sx={{ color: customerInfo.mobilePaymentProvider === 'mtn' ? '#FFCC00' : 'inherit' }}>MTN</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Paper 
+                      elevation={customerInfo.mobilePaymentProvider === 'airtel' ? 3 : 1}
+                      sx={{
+                        p: 2,
+                        cursor: 'pointer',
+                        border: customerInfo.mobilePaymentProvider === 'airtel' ? '2px solid #FF0000' : '1px solid #e0e0e0',
+                        borderRadius: 2,
+                        transition: 'all 0.3s ease',
+                        '&:hover': { borderColor: '#FF0000' },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100px',
+                        backgroundColor: customerInfo.mobilePaymentProvider === 'airtel' ? 'rgba(255, 0, 0, 0.1)' : 'white'
+                      }}
+                      onClick={() => handleMobileProviderChange({ target: { value: 'airtel' } })}
+                    >
+                      <Typography variant="h6" align="center" sx={{ color: customerInfo.mobilePaymentProvider === 'airtel' ? '#FF0000' : 'inherit' }}>Airtel</Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                
+                {customerInfo.mobilePaymentProvider && (
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                      {t('paymentInstructions', 'ØªØ¹Ù„ÙŠÙ…Ø§Øª Ø§Ù„Ø¯ÙØ¹')}
+                    </Typography>
+                    <Paper sx={{ p: 2, bgcolor: '#f9f9f9', borderRadius: 2 }}>
+                      <Typography variant="body2">
+                        {t('sendMoneyTo', 'Ø£Ø±Ø³Ù„ Ø§Ù„Ù…Ø¨Ù„Øº Ø¥Ù„Ù‰')}: <strong>{customerInfo.mobilePaymentProvider === 'mtn' ? (storeSettings?.payment?.mtnPhoneNumber || t('settings:mtnPhoneNumber', 'Ø±Ù‚Ù… Ù‡Ø§ØªÙ MTN')) : (storeSettings?.payment?.airtelPhoneNumber || t('settings:airtelPhoneNumber', 'Ø±Ù‚Ù… Ù‡Ø§ØªÙ Airtel'))}</strong>
+                      </Typography>
+                      <Typography variant="body2">
+                        {t('amount', 'Ø§Ù„Ù…Ø¨Ù„Øº')}: <strong>{currency.symbol}{total.toFixed(2)}</strong>
+                      </Typography>
+                      
+                      {/* Open Payment App Button */}
+                      <Box sx={{ mt: 2, mb: 2 }}>
+                        <Button
+                          variant="contained"
+                          fullWidth
+                          startIcon={<Payment />}
+                          onClick={() => openPaymentApp(customerInfo.mobilePaymentProvider)}
+                          sx={{ 
+                            bgcolor: '#7A1F3D', 
+                            '&:hover': { bgcolor: '#5C0F2D' },
+                            color: '#000',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {t('openPaymentApp', 'ÙØªØ­ ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„Ø¯ÙØ¹')}
+                          {total > 0 && ` (${currency.symbol}${Math.round(total)})`}
+                        </Button>
+                        <Typography variant="caption" display="block" sx={{ mt: 1, textAlign: 'center' }}>
+                          {t('paymentAppInfo', 'Ø³ÙŠØªÙ… ÙØªØ­ ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„Ø¯ÙØ¹ ØªÙ„Ù‚Ø§Ø¦ÙŠÙ‹Ø§ Ù…Ø¹ Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ù…Ø·Ù„ÙˆØ¨')}
+                        </Typography>
+                      </Box>
+                      
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        {t('uploadReceipt', 'Ø¨Ø¹Ø¯ Ø¥ØªÙ…Ø§Ù… Ø¹Ù…Ù„ÙŠØ© Ø§Ù„Ø¯ÙØ¹ØŒ ÙŠØ±Ø¬Ù‰ ØªØ­Ù…ÙŠÙ„ ØµÙˆØ±Ø© Ø¥ÙŠØµØ§Ù„ Ø§Ù„Ø¯ÙØ¹')}
+                      </Typography>
+                      
+                      <Box sx={{ mt: 2 }}>
+                        <Button
+                          variant="outlined"
+                          component="label"
+                          startIcon={<Receipt />}
+                          sx={{ 
+                            borderColor: '#7A1F3D', 
+                            color: '#7A1F3D',
+                            '&:hover': { borderColor: '#5C0F2D', backgroundColor: 'rgba(122, 31, 61, 0.08)' }
+                          }}
+                        >
+                          {t('uploadReceiptImage', 'ØªØ­Ù…ÙŠÙ„ ØµÙˆØ±Ø© Ø§Ù„Ø¥ÙŠØµØ§Ù„')}
+                          <input
+                            type="file"
+                            hidden
+                            accept="image/*"
+                            onChange={handleTransactionImageUpload}
+                          />
+                        </Button>
+                        {customerInfo.transactionImage && (
+                          <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+                            <Chip 
+                              label={customerInfo.transactionImage.name} 
+                              onDelete={() => setCustomerInfo(prev => ({ ...prev, transactionImage: null }))}
+                              color="primary"
+                              sx={{ bgcolor: 'rgba(122, 31, 61, 0.2)', color: '#000' }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    </Paper>
+                  </Box>
+                )}
+              </Box>
+            </Grid>
+          )}
+        </Grid>
+      </Box>
+    );
+  };
+
+  // Render order confirmation
+  const renderOrderConfirmation = () => {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          {t('orderSummary')}
+        </Typography>
+        
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            {t('customerInfo')}
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={4}>
+              <Typography variant="body2" color="text.secondary">
+                {t('name')}:
+              </Typography>
+            </Grid>
+            <Grid item xs={8}>
+              <Typography variant="body2">
+                {customerInfo.name}
+              </Typography>
+            </Grid>
+            <Grid item xs={4}>
+              <Typography variant="body2" color="text.secondary">
+                {t('phone')}:
+              </Typography>
+            </Grid>
+            <Grid item xs={8}>
+              <Typography variant="body2">
+                {customerInfo.phone}
+              </Typography>
+            </Grid>
+            {customerInfo.email && (
+              <>
+                <Grid item xs={4}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('email')}:
+                  </Typography>
+                </Grid>
+                <Grid item xs={8}>
+                  <Typography variant="body2">
+                    {customerInfo.email}
+                  </Typography>
+                </Grid>
+              </>
+            )}
+            {customerInfo.address && (
+              <>
+                <Grid item xs={4}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('address')}:
+                  </Typography>
+                </Grid>
+                <Grid item xs={8}>
+                  <Typography variant="body2">
+                    {customerInfo.address}
+                  </Typography>
+                </Grid>
+              </>
+            )}
+            
+            {/* Payment Method Information */}
+            <Grid item xs={4}>
+              <Typography variant="body2" color="text.secondary">
+                {t('paymentMethod', 'Ø·Ø±ÙŠÙ‚Ø© Ø§Ù„Ø¯ÙØ¹')}:
+              </Typography>
+            </Grid>
+            <Grid item xs={8}>
+              <Typography variant="body2">
+                {customerInfo.paymentMethod === 'cashOnDelivery' 
+                  ? t('cashOnDelivery', 'Ø§Ù„Ø¯ÙØ¹ Ø¹Ù†Ø¯ Ø§Ù„ØªÙˆØµÙŠÙ„')
+                  : t('mobileMoney', 'Ø§Ù„Ø¯ÙØ¹ Ø¹Ø¨Ø± Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„')}
+              </Typography>
+            </Grid>
+            
+            {/* Mobile Payment Provider - Only shown for mobile money */}
+            {customerInfo.paymentMethod === 'mobileMoney' && (
+              <>
+                <Grid item xs={4}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('provider', 'Ù…Ø²ÙˆØ¯ Ø§Ù„Ø®Ø¯Ù…Ø©')}:
+                  </Typography>
+                </Grid>
+                <Grid item xs={8}>
+                  <Typography variant="body2">
+                    {customerInfo.mobilePaymentProvider.toUpperCase()}
+                  </Typography>
+                </Grid>
+                
+                {/* Transaction Receipt - Only shown if uploaded */}
+                {customerInfo.transactionImage && (
+                  <>
+                    <Grid item xs={4}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('transactionReceipt', 'Ø¥ÙŠØµØ§Ù„ Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø©')}:
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={8}>
+                      <Typography variant="body2">
+                        {customerInfo.transactionImage.name}
+                      </Typography>
+                    </Grid>
+                  </>
+                )}
+              </>
+            )}
+          </Grid>
+        </Paper>
+        
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            {t('orderItems')}
+          </Typography>
+          <List>
+            {cartItems.map((item) => (
+              <ListItem key={item.id} divider>
+                <ListItemText 
+                  primary={item.name} 
+                  secondary={`${item.quantity} x ${currency.symbol}${parsePrice(item.price).toFixed(2)}`} 
+                />
+                <Typography variant="body2">
+                  {currency.symbol}{(item.quantity * parsePrice(item.price)).toFixed(2)}
+                </Typography>
+              </ListItem>
+            ))}
+          </List>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={1}>
+              <Grid item xs={6}>
+                <Typography variant="body1">{t('subtotal')}:</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body1" align="right">
+                  {currency.symbol}{subtotal.toFixed(2)}
+                </Typography>
+              </Grid>
+              {tax > 0 && (
+                <>
+                  <Grid item xs={6}>
+                    <Typography variant="body1">{t('tax')} ({taxRatePercent}%):</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body1" align="right">
+                      {currency.symbol}{tax.toFixed(2)}
+                    </Typography>
+                  </Grid>
+                </>
+              )}
+              <Grid item xs={6}>
+                <Typography variant="body1">{t('deliveryFee')}:</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body1" align="right">
+                  {currency.symbol}{deliveryFee.toFixed(2)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="h6">{t('total')}:</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="h6" align="right" color="primary">
+                  {currency.symbol}{total.toFixed(2)}
+                </Typography>
+              </Grid>
+            </Grid>
+          </Box>
+        </Paper>
+      </Box>
+    );
+  };
+
+  // Render order complete
+  const renderOrderComplete = () => {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="h4" gutterBottom color="primary" sx={{ textAlign: 'center', width: '100%' }}>
+          {t('thankYou')}
+        </Typography>
+        <Typography variant="h6" gutterBottom>
+          {t('orderPlaced')}
+        </Typography>
+        {orderNumber && (
+          <Typography variant="body1" gutterBottom>
+            {t('orderNumber')}: <strong>{orderNumber}</strong>
+          </Typography>
+        )}
+        <Typography variant="body1" sx={{ mt: 2 }}>
+          {t('orderConfirmation')}
+        </Typography>
+        <Button 
+          variant="contained" 
+          color="primary" 
+          sx={{ mt: 3 }}
+          onClick={() => {
+            setActiveStep(0);
+            setOrderComplete(false);
+            setOrderNumber(null);
+          }}
+        >
+          {t('placeNewOrder')}
+        </Button>
+      </Box>
+    );
+  };
+
+  // Render step content
+  const getStepContent = (step) => {
+    switch (step) {
+      case 0:
+        return (
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              <Paper 
+                sx={{ 
+                  p: 3, 
+                  mb: 2, 
+                  borderRadius: '16px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                }}
+              >
+                <Box sx={{ display: 'flex', mb: 3, gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                  <TextField
+                    fullWidth
+                    placeholder={t('searchProducts')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search sx={{ color: '#7A1F3D' }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ 
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '12px',
+                        transition: 'all 0.3s ease',
+                        '&:hover fieldset': {
+                          borderColor: '#7A1F3D',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#7A1F3D',
+                          borderWidth: 2,
+                        },
+                      },
+                      '& .MuiInputLabel-outlined.Mui-focused': {
+                        color: '#7A1F3D',
+                      },
+                    }}
+                  />
+                  <FormControl sx={{ minWidth: { xs: '100%', sm: 180 } }}>
+                    <InputLabel id="category-select-label">{t('category')}</InputLabel>
+                    <Select
+                      labelId="category-select-label"
+                      value={selectedCategory}
+                      label={t('category')}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      sx={{ 
+                        borderRadius: '12px',
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#7A1F3D',
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#7A1F3D',
+                          borderWidth: 2,
+                        },
+                        '& .MuiSelect-select': {
+                          padding: '12px 14px',
+                        },
+                      }}
+                      MenuProps={{
+                        PaperProps: {
+                          sx: {
+                            borderRadius: 2,
+                            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.1)',
+                            mt: 0.5,
+                            '& .MuiMenuItem-root': {
+                              padding: '10px 16px',
+                              '&:hover': {
+                                backgroundColor: 'rgba(122, 31, 61, 0.08)',
+                              },
+                              '&.Mui-selected': {
+                                backgroundColor: 'rgba(122, 31, 61, 0.15)',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(122, 31, 61, 0.2)',
+                                },
+                              },
+                            },
+                          },
+                        },
+                      }}
+                    >
+                      {categories.map((category) => (
+                        <MenuItem key={category.id} value={category.id}>
+                          {t(`sales.categories.${category.name}`, { defaultValue: category.name })}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+                {renderProductGrid()}
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper 
+                sx={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  borderRadius: '16px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+                  overflow: 'hidden'
+                }}
+              >
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    background: 'linear-gradient(45deg, #7A1F3D 30%, #9B3A5A 90%)',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <Typography 
+                    variant="h6"
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    <ShoppingCart sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    {t('yourOrder', 'Your Order')}
+                  </Typography>
+                  <Badge 
+                    badgeContent={cartItems.length} 
+                    color="error"
+                    sx={{ '& .MuiBadge-badge': { fontWeight: 'bold' } }}
+                  >
+                    <ShoppingCart />
+                  </Badge>
+                </Box>
+                <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1 }}>
+                  {renderCart()}
+                </Box>
+                <Box sx={{ p: 2 }}>
+                  <Button
+                  variant="contained"
+                  fullWidth
+                  size="large"
+                  onClick={handleNext}
+                  disabled={cartItems.length === 0}
+                  sx={{ 
+                    borderRadius: '12px', 
+                    py: 1.5,
+                    background: 'linear-gradient(45deg, #7A1F3D 30%, #9B3A5A 90%)',
+                    color: '#000',
+                    fontWeight: 'bold',
+                    '&:hover': {
+                      background: 'linear-gradient(45deg, #5C0F2D 30%, #8A2F4F 90%)',
+                      boxShadow: '0 6px 15px rgba(122, 31, 61, 0.4)',
+                      transform: 'translateY(-2px)'
+                    },
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {t('continue', 'Continue')}
+                </Button>
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+        );
+      case 1:
+        return (
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              <Paper>
+                {renderCustomerInfoForm()}
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)' }}>
+                <Box sx={{ p: 2, background: 'linear-gradient(45deg, #7A1F3D 30%, #9B3A5A 90%)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', textShadow: '1px 1px 2px rgba(0,0,0,0.1)', color: '#fff' }}>
+                    <ShoppingCart sx={{ mr: 1, verticalAlign: 'middle', color: '#fff' }} />
+                    {t('yourOrder', 'Your Order')}
+                  </Typography>
+                  <Badge badgeContent={cartItems.length} color="error" sx={{ '& .MuiBadge-badge': { bgcolor: '#C5A93C', color: '#fff', fontWeight: 'bold' } }}>
+                    <ShoppingCart sx={{ color: '#fff' }} />
+                  </Badge>
+                </Box>
+                <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+                  {renderCart(true)}
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+        );
+      case 2:
+        return (
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              <Paper>
+                {renderOrderConfirmation()}
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ p: 2, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+                  <Typography variant="h6">
+                  <ShoppingCart sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  {t('yourOrder')}
+                </Typography>
+                </Box>
+                <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+                  {renderCart(true)}
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+        );
+      default:
+        return 'Unknown step';
+    }
+  };
+
+  // Main render
+  return (
+    <Box sx={{ 
+      minHeight: '100vh',
+      bgcolor: '#f9f9f9',
+      backgroundImage: 'linear-gradient(to bottom, #f5f5f5, #ffffff)',
+      pt: 2,
+      pb: 4
+    }}>
+      <AppBar 
+        position="static" 
+        elevation={3} 
+        sx={{ 
+          mb: 3, 
+          background: 'linear-gradient(45deg, #7A1F3D 30%, #9B3A5A 90%)',
+          borderRadius: '0 0 16px 16px'
+        }}
+      >
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box>
+              <Typography 
+                variant="h5" 
+                component="div"
+                sx={{ 
+                  fontWeight: 'bold',
+                  color: '#fff',
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.2)',
+                  letterSpacing: '0.5px',
+                  lineHeight: 1.1
+                }}
+              >
+                <span style={{ color: '#fff' }}>FOOD</span>{' '}
+                <span style={{ color: '#C5A93C' }}>Zone</span>
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', letterSpacing: '1px', fontSize: '0.65rem' }}>
+                RESTAURANT & CAFE
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton 
+              color="inherit" 
+              onClick={() => setCallDialogOpen(true)}
+              sx={{ 
+                mr: 1,
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  transform: 'scale(1.05)',
+                },
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Phone />
+            </IconButton>
+            <IconButton 
+              color="inherit" 
+              onClick={() => setActiveStep(1)}
+              sx={{ mr: 1 }}
+            >
+              <Badge badgeContent={cartItems.length} color="error">
+                <ShoppingCart />
+              </Badge>
+            </IconButton>
+            <LanguageSwitcher />
+          </Box>
+        </Toolbar>
+      </AppBar>
+      
+      <Container maxWidth="lg">
+        {!ordersOpen && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {ordersClosedMessage}
+          </Alert>
+        )}
+        {orderComplete ? (
+          renderOrderComplete()
+        ) : (
+          <>
+            <Paper 
+              elevation={3}
+              sx={{ 
+                mb: 3, 
+                p: 3, 
+                borderRadius: 4,
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.05)'
+              }}
+            >
+              <Stepper 
+                activeStep={activeStep} 
+                alternativeLabel
+                sx={{
+                  '& .MuiStepLabel-root .Mui-completed': {
+                    color: '#7A1F3D', // golden color for completed steps
+                  },
+                  '& .MuiStepLabel-root .Mui-active': {
+                    color: '#7A1F3D', // golden color for active step
+                  },
+                  '& .MuiStepLabel-label.Mui-active.MuiStepLabel-alternativeLabel': {
+                    color: 'rgba(0, 0, 0, 0.87)', // darker text for active step
+                    fontWeight: 'bold',
+                  },
+                }}
+              >
+                {steps.map((label) => (
+                  <Step key={label}>
+                    <StepLabel>{label}</StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
+            </Paper>
+            
+            {getStepContent(activeStep)}
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+              <Button
+                variant="outlined"
+                disabled={activeStep === 0}
+                onClick={handleBack}
+              >
+                {t('back', 'Back')}
+              </Button>
+              
+              {activeStep === steps.length - 1 ? (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={submitOrder}
+                  disabled={orderSubmitting}
+                >
+                  {orderSubmitting ? (
+                    <CircularProgress size={24} color="inherit" />
+                  ) : (
+                    t('placeOrder', 'Place Order')
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleNext}
+                >
+                  {t('continue')}
+                </Button>
+              )}
+            </Box>
+          </>
+        )}
+      </Container>
+
+      {/* Payment Confirmation Dialog */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={() => setConfirmDialogOpen(false)}
+        aria-labelledby="confirm-payment-dialog-title"
+      >
+        <DialogTitle id="confirm-payment-dialog-title">
+          {t('confirmPayment', 'ØªØ£ÙƒÙŠØ¯ Ø§Ù„Ø¯ÙØ¹')}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t('confirmPaymentMessage', 'Ù‡Ù„ Ø£Ù†Øª Ù…ØªØ£ÙƒØ¯ Ù…Ù† Ø§Ù„Ø¯ÙØ¹ Ø¨Ø§Ø³ØªØ®Ø¯Ø§Ù… {{provider}}?', {
+              provider: selectedProvider === 'mtn' ? 'MTN' : 'Airtel'
+            })}
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2 }}>
+            {t('confirmPaymentDescription', 'Ø³ÙŠØªÙ… ÙØªØ­ ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„Ø¯ÙØ¹ ÙˆØ³ØªØ­ØªØ§Ø¬ Ø¥Ù„Ù‰ Ø¥Ø¯Ø®Ø§Ù„ {{pinDigits}} Ø£Ø±Ù‚Ø§Ù… PIN Ù„Ø¥ØªÙ…Ø§Ù… Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø©.', {
+              pinDigits: storeSettings?.payment?.mobilePinDigits || 4
+            })}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialogOpen(false)} color="primary">
+            {t('no', 'Ù„Ø§')}
+          </Button>
+          <Button 
+            onClick={() => {
+              setConfirmDialogOpen(false);
+              openPaymentApp(selectedProvider);
+            }} 
+            color="primary" 
+            autoFocus
+          >
+            {t('yes', 'Ù†Ø¹Ù…')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Call Options Dialog */}
+      <Dialog
+        open={callDialogOpen}
+        onClose={() => setCallDialogOpen(false)}
+        aria-labelledby="call-dialog-title"
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            minWidth: 300,
+            background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)'
+          }
+        }}
+      >
+        <DialogTitle 
+          id="call-dialog-title"
+          sx={{ 
+            textAlign: 'center',
+            pb: 1,
+            background: 'linear-gradient(45deg, #7A1F3D 30%, #9B3A5A 90%)',
+            color: '#000',
+            fontWeight: 'bold'
+          }}
+        >
+          <Phone sx={{ mr: 1, verticalAlign: 'middle' }} />
+          {i18n.language === 'ar' ? 'Ø§ØªØµÙ„ Ø¨Ù†Ø§' : 'Call Us'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3, pb: 2 }}>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              textAlign: 'center', 
+              mb: 3,
+              color: '#555',
+              fontWeight: 500
+            }}
+          >
+            {i18n.language === 'ar' ? 'Ø§Ø®ØªØ± Ù…Ø²ÙˆØ¯ Ø§Ù„Ø®Ø¯Ù…Ø© Ù„Ù„Ø§ØªØµØ§Ù„:' : 'Choose your service provider to call:'}
+          </Typography>
+          
+          <Grid container spacing={2}>
+            {/* MTN Option */}
+            <Grid item xs={12}>
+              <Paper
+                elevation={2}
+                sx={{
+                  p: 2,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  border: '2px solid transparent',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 25px rgba(255, 193, 7, 0.3)',
+                    border: '2px solid #ffc107'
+                  }
+                }}
+                onClick={() => handlePhoneCall('mtn')}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(45deg, #ffc107 30%, #ffeb3b 90%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mr: 2
+                      }}
+                    >
+                      <Typography variant="h6" sx={{ color: '#000', fontWeight: 'bold' }}>
+                        MTN
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#333' }}>
+                        MTN
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#666' }}>
+                        {phoneNumbers.mtn}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Phone sx={{ color: '#ffc107', fontSize: 28 }} />
+                </Box>
+              </Paper>
+            </Grid>
+
+            {/* Airtel Option */}
+            <Grid item xs={12}>
+              <Paper
+                elevation={2}
+                sx={{
+                  p: 2,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  border: '2px solid transparent',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 25px rgba(244, 67, 54, 0.3)',
+                    border: '2px solid #f44336'
+                  }
+                }}
+                onClick={() => handlePhoneCall('airtel')}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(45deg, #f44336 30%, #ff5722 90%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mr: 2
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>
+                        AIR
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#333' }}>
+                        Airtel
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#666' }}>
+                        {phoneNumbers.airtel}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Phone sx={{ color: '#f44336', fontSize: 28 }} />
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+          <Button 
+            onClick={() => setCallDialogOpen(false)} 
+            variant="outlined"
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              '&:hover': {
+                transform: 'scale(1.05)'
+              }
+            }}
+          >
+            {i18n.language === 'ar' ? 'Ø¥Ù„ØºØ§Ø¡' : 'Cancel'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+};
+
+export default OnlineOrder;

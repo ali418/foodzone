@@ -1,0 +1,17 @@
+{
+  "name": "cafesundus",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "scripts": {
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "build": "cd frontend && npm run build",
+    "start": "node backend/src/index.js",
+    "postinstall": "npm run install:all && npm run build",
+    "clean": "rm -rf frontend/build && rm -rf backend/node_modules && rm -rf frontend/node_modules"
+  }
+}

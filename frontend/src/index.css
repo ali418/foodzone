@@ -1,0 +1,105 @@
+
+
+@media screen {
+  #receipt-print { display: none !important; }
+}
+
+/* --- كود الطباعة الجديد (للعزل والتوسيط) --- */
+
+@media print {
+
+  /* 1. إخفاء كل عناصر الصفحة */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. إظهار الفاتورة فقط + كل العناصر اللي جواها */
+  #receipt-to-print, #receipt-to-print * {
+    visibility: visible;
+  }
+
+  /* 3. "عزل" الفاتورة ونقلها لأول الصفحة */
+  #receipt-to-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 0;
+    padding: 0 2mm; /* إضافة هامش أمان داخلي */
+    width: 72.1mm; /* العرض الفعلي القابل للطباعة */
+    box-sizing: border-box;
+    padding-bottom: 20mm !important; /* مساحة إضافية في النهاية للطابعة الحرارية */
+  }
+
+  /* 4. ضبط إعدادات الصفحة للطباعة */
+  @page {
+    size: 80mm auto; /* حجم الورق 80 مم والطول تلقائي */
+    margin: 0;       /* إزالة أي هوامش افتراضية */
+  }
+
+  /* 5. (احتياطي) لضمان عدم وجود هوامش غريبة */
+  body, html {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 6. تحسينات إضافية للطابعة الحرارية */
+  #receipt-to-print {
+    page-break-inside: avoid; /* منع تقسيم الفاتورة على صفحات متعددة */
+    orphans: 0; /* السماح بطباعة أي عدد من الأسطر في نهاية الصفحة */
+    widows: 0;  /* السماح بطباعة أي عدد من الأسطر في بداية الصفحة */
+  }
+
+  /* 7. إعدادات خاصة للطابعات الحرارية */
+  #receipt-to-print * {
+    color: #000000 !important; /* نص أسود */
+    background-color: transparent !important; /* خلفية شفافة */
+    background: none !important; /* إزالة أي خلفيات */
+    box-shadow: none !important; /* إزالة الظلال */
+    text-shadow: none !important; /* إزالة ظلال النص */
+    border-color: #000000 !important; /* حدود سوداء */
+    -webkit-print-color-adjust: exact !important; /* فرض طباعة الألوان */
+    print-color-adjust: exact !important; /* فرض طباعة الألوان */
+  }
+
+  /* 8. تحسين الخطوط للطابعة الحرارية */
+  #receipt-to-print {
+    font-family: 'Courier New', monospace !important;
+    font-size: 10px !important; /* تصغير حجم الخط العام */
+    line-height: 1.3 !important;
+  }
+
+  /* 9. استخدام Grid لتقريب المسافات */
+  .receipt-grid-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .receipt-grid-row .receipt-value {
+    text-align: right;
+  }
+
+  /* 9. إعدادات خاصة للجداول */
+  #receipt-to-print table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  #receipt-to-print table, 
+  #receipt-to-print th, 
+  #receipt-to-print td {
+    border: 1px solid #000000 !important;
+    color: #000000 !important;
+    background: white !important;
+  }
+
+  /* 10. إزالة أي تأثيرات بصرية قد تتداخل مع الطباعة */
+  #receipt-to-print .MuiBox-root,
+  #receipt-to-print .MuiTypography-root,
+  #receipt-to-print .MuiPaper-root {
+    background: transparent !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+  }
+}

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>معاينة الفاتورة - كافيه سندس</title>
+    <style>
+        /* إعدادات عامة للصفحة */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+            direction: rtl;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .controls {
+            padding: 20px;
+            background: #ecf0f1;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn-print {
+            background: #27ae60;
+        }
+
+        .btn-print:hover {
+            background: #229954;
+        }
+
+        /* منطقة الفاتورة */
+        .invoice-container {
+            padding: 20px;
+        }
+
+        /* --- كود الطباعة الجديد (للعزل والتوسيط) --- */
+        @media screen {
+            #receipt-to-print { 
+                display: block;
+                max-width: 300px;
+                margin: 0 auto;
+                border: 2px dashed #ccc;
+                padding: 20px;
+                background: white;
+            }
+        }
+
+        @media print {
+            /* 1. إخفاء كل عناصر الصفحة */
+            body * {
+                visibility: hidden;
+            }
+
+            /* 2. إظهار الفاتورة فقط + كل العناصر اللي جواها */
+            #receipt-to-print, #receipt-to-print * {
+                visibility: visible;
+            }
+
+            /* 3. "عزل" الفاتورة ونقلها لأول الصفحة */
+            #receipt-to-print {
+                position: absolute;
+                left: 0;
+                top: 0;
+                margin: 0;
+                padding: 0;
+                width: 80mm; /* تحديد عرض الفاتورة بالضبط */
+                padding-bottom: 20mm !important; /* مساحة إضافية في النهاية للطابعة الحرارية */
+            }
+
+            /* 4. ضبط إعدادات الصفحة للطباعة */
+            @page {
+                size: 80mm auto; /* حجم الورق 80 مم والطول تلقائي */
+                margin: 0;       /* إزالة أي هوامش افتراضية */
+            }
+
+            /* 5. (احتياطي) لضمان عدم وجود هوامش غريبة */
+            body, html {
+                margin: 0;
+                padding: 0;
+            }
+
+            /* 6. تحسينات إضافية للطابعة الحرارية */
+            #receipt-to-print {
+                page-break-inside: avoid; /* منع تقسيم الفاتورة على صفحات متعددة */
+                orphans: 0; /* السماح بطباعة أي عدد من الأسطر في نهاية الصفحة */
+                widows: 0;  /* السماح بطباعة أي عدد من الأسطر في بداية الصفحة */
+            }
+
+            /* 7. إعدادات خاصة للطابعات الحرارية */
+            #receipt-to-print * {
+                color: #000000 !important; /* نص أسود */
+                background-color: transparent !important; /* خلفية شفافة */
+                background: none !important; /* إزالة أي خلفيات */
+                box-shadow: none !important; /* إزالة الظلال */
+                text-shadow: none !important; /* إزالة ظلال النص */
+                border-color: #000000 !important; /* حدود سوداء */
+                -webkit-print-color-adjust: exact !important; /* فرض طباعة الألوان */
+    print-color-adjust: exact !important; /* فرض طباعة الألوان */
+            }
+
+            /* 8. تحسين الخطوط للطابعة الحرارية */
+            #receipt-to-print {
+                font-family: 'Courier New', monospace !important; /* خط واضح للطابعة الحرارية */
+                font-size: 12px !important; /* حجم خط مناسب */
+                line-height: 1.4 !important; /* مسافة بين الأسطر */
+            }
+
+            /* 9. إعدادات خاصة للجداول */
+            #receipt-to-print table {
+                border-collapse: collapse !important;
+                width: 100% !important;
+            }
+
+            #receipt-to-print table, 
+            #receipt-to-print th, 
+            #receipt-to-print td {
+                border: 1px solid #000000 !important;
+                color: #000000 !important;
+                background: white !important;
+            }
+
+            /* 10. إزالة أي تأثيرات بصرية قد تتداخل مع الطباعة */
+            #receipt-to-print .receipt-header,
+            #receipt-to-print .store-name,
+            #receipt-to-print .store-info,
+            #receipt-to-print .invoice-info,
+            #receipt-to-print .item-row,
+            #receipt-to-print .totals-section,
+            #receipt-to-print .receipt-footer {
+                background: transparent !important;
+                color: #000000 !important;
+                box-shadow: none !important;
+            }
+        }
+
+        /* تنسيق الفاتورة */
+        #receipt-to-print {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #000;
+        }
+
+        .receipt-header {
+            text-align: center;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 10px;
+        }
+
+        .store-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .store-info {
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+
+        .invoice-info {
+            margin-bottom: 15px;
+            font-size: 11px;
+        }
+
+        .invoice-info div {
+            margin-bottom: 3px;
+        }
+
+        .items-table {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .items-header {
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 5px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 11px;
+        }
+
+        .item-name {
+            flex: 1;
+        }
+
+        .item-qty {
+            width: 30px;
+            text-align: center;
+        }
+
+        .item-price {
+            width: 60px;
+            text-align: left;
+        }
+
+        .totals {
+            border-top: 1px dashed #000;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+
+        .total-final {
+            font-weight: bold;
+            font-size: 14px;
+            border-top: 1px solid #000;
+            padding-top: 5px;
+            margin-top: 5px;
+        }
+
+        .receipt-footer {
+            text-align: center;
+            margin-top: 15px;
+            border-top: 1px dashed #000;
+            padding-top: 10px;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧾 معاينة الفاتورة</h1>
+            <p>يمكنك معاينة وطباعة الفاتورة بدون تشغيل النظام</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-print" onclick="printInvoice()">🖨️ طباعة الفاتورة</button>
+            <button class="btn" onclick="window.print()">📄 طباعة الصفحة كاملة</button>
+        </div>
+
+        <div class="invoice-container">
+            <!-- الفاتورة الفعلية -->
+            <div id="receipt-to-print">
+                <div class="receipt-header">
+                    <div class="store-name">كافيه سندس</div>
+                    <div class="store-info">شارع الملك فهد، الرياض</div>
+                    <div class="store-info">هاتف: 0112345678</div>
+                    <div class="store-info">الرقم الضريبي: 123456789</div>
+                </div>
+
+                <div class="invoice-info">
+                    <div><strong>رقم الفاتورة:</strong> INV001</div>
+                    <div><strong>التاريخ:</strong> 2024-01-15</div>
+                    <div><strong>الوقت:</strong> 14:30</div>
+                    <div><strong>الكاشير:</strong> أحمد محمد</div>
+                </div>
+
+                <div class="items-table">
+                    <div class="items-header">
+                        <span>الصنف</span>
+                        <span>الكمية</span>
+                        <span>السعر</span>
+                    </div>
+                    
+                    <div class="item-row">
+                        <span class="item-name">قهوة عربية</span>
+                        <span class="item-qty">2</span>
+                        <span class="item-price">30.00</span>
+                    </div>
+                    
+                    <div class="item-row">
+                        <span class="item-name">كابتشينو</span>
+                        <span class="item-qty">1</span>
+                        <span class="item-price">25.00</span>
+                    </div>
+                    
+                    <div class="item-row">
+                        <span class="item-name">كرواسان بالجبن</span>
+                        <span class="item-qty">1</span>
+                        <span class="item-price">15.00</span>
+                    </div>
+                    
+                    <div class="item-row">
+                        <span class="item-name">عصير برتقال طازج</span>
+                        <span class="item-qty">1</span>
+                        <span class="item-price">18.00</span>
+                    </div>
+                </div>
+
+                <div class="totals">
+                    <div class="total-row">
+                        <span>المجموع الفرعي:</span>
+                        <span>88.00 ريال</span>
+                    </div>
+                    <div class="total-row">
+                        <span>الضريبة (15%):</span>
+                        <span>13.20 ريال</span>
+                    </div>
+                    <div class="total-row total-final">
+                        <span>المجموع النهائي:</span>
+                        <span>101.20 ريال</span>
+                    </div>
+                </div>
+
+                <div class="receipt-footer">
+                    <div>شكراً لزيارتكم</div>
+                    <div>نتطلع لخدمتكم مرة أخرى</div>
+                    <div>---</div>
+                    <div>تم الدفع نقداً</div>
+                </div>
+
+                <!-- مساحة إضافية للطابعة الحرارية -->
+                <div style="height: 60px; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function printInvoice() {
+            // طباعة الفاتورة فقط
+            window.print();
+        }
+
+        // إضافة اختصار لوحة المفاتيح للطباعة
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                printInvoice();
+            }
+        });
+
+        // رسالة ترحيب
+        console.log('🧾 صفحة معاينة الفاتورة جاهزة!');
+        console.log('📝 يمكنك الضغط على Ctrl+P للطباعة السريعة');
+    </script>
+</body>
+</html>
