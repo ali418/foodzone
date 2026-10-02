@@ -252,6 +252,32 @@ const syncDatabase = async () => {
         console.log('ℹ️  Default settings already exist.');
       }
     }
+
+    // ── Ensure admin user exists with known password ──
+    const User = db.User;
+    if (User) {
+      const bcrypt = require('bcryptjs');
+      const { v4: uuidv4 } = require('uuid');
+      const adminUser = await User.findOne({ where: { username: 'admin' } });
+      if (!adminUser) {
+        const hashed = await bcrypt.hash('admin123', 12);
+        await User.create({
+          id: uuidv4(),
+          username: 'admin',
+          email: 'admin@foodzone.space',
+          password: hashed,
+          fullName: 'System Administrator',
+          role: 'admin',
+          isActive: true,
+        });
+        console.log('🎉 Admin user created (username: admin, password: admin123)');
+      } else {
+        // Reset password to known value if needed
+        const hashed = await bcrypt.hash('admin123', 12);
+        await adminUser.update({ password: hashed, isActive: true });
+        console.log('🔑 Admin password reset to: admin123');
+      }
+    }
   } catch (err) {
     console.error('❌ Sync failed:', err);
   }
