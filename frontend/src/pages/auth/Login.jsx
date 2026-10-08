@@ -44,6 +44,15 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Block search engines from indexing the login page
+  useEffect(() => {
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex, nofollow';
+    document.head.appendChild(meta);
+    return () => document.head.removeChild(meta);
+  }, []);
+
   // Update document title based on current language
   useEffect(() => {
     document.title = 'FOOD Zone - ' + t('login');

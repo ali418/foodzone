@@ -1,12 +1,13 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Allow: /
 Allow: /online-order
+Disallow: /login
 Disallow: /admin
 Disallow: /settings
 Disallow: /inventory
 Disallow: /reports
 Disallow: /users
 Disallow: /sales
+Disallow: /dashboard
 
 Sitemap: https://foodzone.space/sitemap.xml
